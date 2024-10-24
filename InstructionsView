@@ -1,0 +1,40 @@
+import SwiftUI
+
+struct InstructionsView: View {
+    var body: some View {
+        NavigationView {
+            List {
+                Text("Pick any of the options below to target certain aspects of your speech! Click the recording button and Speak Sharp will listen to your pronunciations and give you advice if you can improve them! Use this tool in a quiet environment or with headphones!")
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                
+                Section(header: Text("Options").font(.title).fontWeight(.bold).foregroundColor(.blue)) {
+                    NavigationLink(destination: SpeechView()) {
+                        Text("Random Words")
+                    }
+                    NavigationLink(destination: THview()) {
+                        Text("TH - Sounds")
+                    }
+                    NavigationLink(destination: Rview()) {
+                        Text("R - Sounds")
+                    }
+                    NavigationLink(destination: VWview()) {
+                        Text("V/W - Sounds")
+                    }
+                    NavigationLink(destination: Hview()) {
+                        Text("H - Sounds")
+                    }
+                    NavigationLink(destination: Lview()) {
+                        Text("L - Sounds")
+                    }
+                    NavigationLink(destination: SPANISHview()) {
+                        Text("Español")
+                    }
+                }
+            }
+            .listStyle(GroupedListStyle())
+            .padding()
+            .navigationBarTitle("Instructions")
+        }
+    }
+}
