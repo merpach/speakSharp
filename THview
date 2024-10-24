@@ -1,0 +1,194 @@
+import SwiftUI
+import Speech
+import AVFoundation
+
+struct THview: View {
+        let wordsTH = ["the", "this", "that", "them", "they", "then", "those", "with", "without", "other", "mother", "father", "brother", "sister", "together", "bath", "both", "path", "cloth", "south", "north", "health", "teeth", "three", "through", "thank", "think", "thin", "thick", "thirst", "thrust", "threat", "thrive", "thrill", "thug"]
+        let advice = ["Try to Annunciate more!", "Listen the the correct pronunciation!", "Try to cut the words into syllables then combine them!", "Say the world slowly then gradually increase your speed!", "Focus on key sounds!", "Take a deep breath than say the word again!"]
+        
+        @State private var currentWordIndexTH = 0
+        @State private var spokenWordTH = ""
+        @State private var isRecordingTH = false
+        @State private var wordColorTH = Color(hex: "4E342E") 
+        @State private var backgroundColorTH = Color(hex: "81C784")  // Green color for background
+        @State private var selectedAdviceTH = ""
+        
+        let recordingDurationTH: TimeInterval = 10 
+        var recognitionTaskTH: SFSpeechRecognitionTask? // Declare recognitionTask here
+        let synthesizerTH = AVSpeechSynthesizer() // Speech synthesizer
+        
+        var body: some View {
+            VStack {
+                Text("Pronounce this word:")
+                    .font(.title)
+                    .foregroundColor(.white)
+                    .padding(.bottom, 10)
+                
+                HStack {
+                    Text(wordsTH[currentWordIndexTH])
+                        .font(.title)
+                        .foregroundColor(wordColorTH) 
+                        .padding()
+                        .background(Color.white)
+                        .cornerRadius(10)
+                        .padding(.horizontal, 20)
+                    
+                    Button(action: {
+                        speakWord(self.wordsTH[self.currentWordIndexTH]) // Speak the word when button is tapped
+                        self.startSpeechRecognition()
+                    }) {
+                        Image(systemName: "speaker.fill")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 30, height: 30)
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 10)
+                    }
+                }
+                
+                Button(action: {
+                    if !self.isRecordingTH {
+                        self.startSpeechRecognition()
+                    }
+                }) {
+                    Text("Start Listening")
+                        .padding()
+                        .foregroundColor(.white)
+                        .background(Color.blue)
+                        .cornerRadius(10)
+                }
+                .disabled(isRecordingTH)
+                .padding(.top, 20)
+                .padding(.horizontal, 20)
+                
+                Button(action: {
+                    self.moveToNextWord()
+                }) {
+                    Text("Next")
+                        .padding()
+                        .foregroundColor(.white)
+                        .background(Color.blue)
+                        .cornerRadius(10)
+                }
+                .padding(.top, 10)
+                .padding(.horizontal, 20)
+                
+                if !selectedAdviceTH.isEmpty {
+                    Text(selectedAdviceTH)
+                        .padding()
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                }
+                
+                Text(spokenWordTH)
+                    .padding()
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(30)
+            .frame(maxWidth: .infinity, maxHeight: .infinity) // Fill the whole screen
+            .background(backgroundColorTH)
+            .edgesIgnoringSafeArea(.all)
+            .onAppear {
+                self.currentWordIndexTH = Int.random(in: 0..<self.wordsTH.count) // Give currentWordIndex a random value
+                requestMicrophonePermission()
+            }
+        }
+        
+        func startSpeechRecognition() {
+            let word = wordsTH[currentWordIndexTH]
+            isRecordingTH = true
+            
+            let recognizer = SFSpeechRecognizer()
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            let audioEngine = AVAudioEngine()
+            
+            let inputNode = audioEngine.inputNode
+            
+            let recognitionTimeout = DispatchTime.now() + recordingDurationTH
+            let recognitionTimeoutWorkItem = DispatchWorkItem {
+                audioEngine.stop()
+                self.recognitionTaskTH?.cancel() 
+                self.isRecordingTH = false
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: recognitionTimeout, execute: recognitionTimeoutWorkItem)
+            
+            recognizer?.recognitionTask(with: request, resultHandler: { (result, error) in
+                recognitionTimeoutWorkItem.cancel()
+                if let result = result {
+                    let bestString = result.bestTranscription.formattedString.lowercased()
+                    print("You said: \(bestString)")
+                    
+                    self.spokenWordTH = bestString
+                    if bestString == word {
+                        print("Correct pronunciation!")
+                        self.selectedAdviceTH = "Good job!"
+                        self.moveToNextWord()
+                    } else {
+                        print("Incorrect pronunciation. Try again.")
+                        self.wordColorTH = .red // Set word text color to red if pronunciation is incorrect
+                        self.selectedAdviceTH = self.advice.randomElement() ?? ""
+                        self.isRecordingTH = false
+                        self.startRecordingButtonClicked() // Automatically click start recording button if word is incorrect
+                    }
+                } else if let error = error {
+                    print("Recognition failed with error: \(error)")
+                    self.isRecordingTH = false
+                }
+            })
+            
+            let recordingFormat = inputNode.outputFormat(forBus: 0)
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
+                // Ignore audio input when the program is speaking
+                if !self.synthesizerTH.isSpeaking {
+                    request.append(buffer)
+                }
+            }
+            
+            do {
+                try audioEngine.start()
+            } catch {
+                print("Error starting audioEngine: \(error)")
+            }
+        }
+        
+        func moveToNextWord() {
+            currentWordIndexTH = Int.random(in: 0..<wordsTH.count) // Select random word index
+            spokenWordTH = ""
+            wordColorTH = Color(hex: "4E342E") // Reset word text color to brown for the next word
+            selectedAdviceTH = ""
+            startSpeechRecognition() // Start listening for the next word automatically
+        }
+        
+        func requestMicrophonePermission() {
+            SFSpeechRecognizer.requestAuthorization { authStatus in
+                switch authStatus {
+                case .authorized:
+                    print("Microphone access granted")
+                case .denied:
+                    print("User denied access to microphone")
+                case .restricted:
+                    print("Microphone access restricted")
+                case .notDetermined:
+                    print("Microphone access not determined")
+                default:
+                    break
+                }
+            }
+        }
+        
+        func startRecordingButtonClicked() {
+            // Simulate clicking the "Start Recording" 
+            DispatchQueue.main.async {
+                self.isRecordingTH = false
+                self.startSpeechRecognition()
+            }
+        }
+        
+        func speakWord(_ word: String) {
+            let utterance = AVSpeechUtterance(string: word)
+            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+            synthesizerTH.speak(utterance)
+        }
+} 
