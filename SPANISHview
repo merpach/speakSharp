@@ -1,0 +1,194 @@
+import SwiftUI
+import Speech
+import AVFoundation
+
+struct SPANISHview: View {
+    let words = ["casa", "perro", "luna", "árbol", "libro", "pelota", "pastel", "viento", "fuego", "nieve", "hoja", "rosa", "rana", "oso", "lobo", "parte", "lima", "maíz", "arroz", "camisa", "vestido", "falda", "manzana", "plátano", "uva", "durazno", "limón", "naranja", "hombre", "serpiente", "caballo", "tigre", "pero", "panda", "mono", "terminar", "tragar", "vestido", "o", "bueno", "hola"]
+    let advice = ["Intenta articular más", "Escucha la pronunciación correcta", "Intenta dividir las palabras en sílabas y luego combinarlas", "Di la palabra lentamente y luego aumenta gradualmente tu velocidad", "Enfócate en los sonidos clave", "Toma una respiración profunda y luego di la palabra nuevamente"]
+    
+    @State private var currentWordIndex = 0
+    @State private var spokenWord = ""
+    @State private var isRecording = false
+    @State private var wordColor = Color(hex: "4E342E") 
+    @State private var backgroundColor = Color(hex: "81C784") 
+    @State private var selectedAdvice = ""
+    
+    let recordingDuration: TimeInterval = 10 
+    var recognitionTask: SFSpeechRecognitionTask? // Declare recognitionTask here
+    let synthesizer = AVSpeechSynthesizer() // Speech synthesizer
+    
+    var body: some View {
+        VStack {
+            Text("Pronuncia esta palabra:")
+                .font(.title)
+                .foregroundColor(.white)
+                .padding(.bottom, 10)
+            
+            HStack {
+                Text(words[currentWordIndex])
+                    .font(.title)
+                    .foregroundColor(wordColor) 
+                    .padding()
+                    .background(Color.white)
+                    .cornerRadius(10)
+                    .padding(.horizontal, 20)
+                
+                Button(action: {
+                    speakWord(self.words[self.currentWordIndex]) // Speak the word when button is tapped
+                    self.startSpeechRecognition()
+                }) {
+                    Image(systemName: "speaker.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 30, height: 30)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 10)
+                }
+            }
+            
+            Button(action: {
+                if !self.isRecording {
+                    self.startSpeechRecognition()
+                }
+            }) {
+                Text("Comenzar grabación")
+                    .padding()
+                    .foregroundColor(.white)
+                    .background(Color.blue)
+                    .cornerRadius(10)
+            }
+            .disabled(isRecording)
+            .padding(.top, 20)
+            .padding(.horizontal, 20)
+            
+            Button(action: {
+                self.moveToNextWord()
+            }) {
+                Text("próximo")
+                    .padding()
+                    .foregroundColor(.white)
+                    .background(Color.blue)
+                    .cornerRadius(10)
+            }
+            .padding(.top, 10)
+            .padding(.horizontal, 20)
+            
+            if !selectedAdvice.isEmpty {
+                Text(selectedAdvice)
+                    .padding()
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Text(spokenWord)
+                .padding()
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+        }
+        .padding(30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity) // Fill the whole screen
+        .background(backgroundColor)
+        .edgesIgnoringSafeArea(.all)
+        .onAppear {
+            self.currentWordIndex = Int.random(in: 0..<self.words.count) // Give currentWordIndex a random value
+            requestMicrophonePermission()
+        }
+    }
+    
+    func startSpeechRecognition() {
+        let word = words[currentWordIndex]
+        isRecording = true
+        
+        let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "es-ES")) // Spanish
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        let audioEngine = AVAudioEngine()
+        
+        let inputNode = audioEngine.inputNode
+        
+        let recognitionTimeout = DispatchTime.now() + recordingDuration
+        let recognitionTimeoutWorkItem = DispatchWorkItem {
+            audioEngine.stop()
+            self.recognitionTask?.cancel() // Access recognitionTask here
+            self.isRecording = false
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: recognitionTimeout, execute: recognitionTimeoutWorkItem)
+        
+        recognizer?.recognitionTask(with: request, resultHandler: { (result, error) in
+            recognitionTimeoutWorkItem.cancel()
+            if let result = result {
+                let bestString = result.bestTranscription.formattedString.lowercased()
+                print("You said: \(bestString)")
+                
+                self.spokenWord = bestString
+                if bestString == word {
+                    print("Pronunciación correcta!")
+                    self.selectedAdvice = "¡Bien hecho!"
+                    self.moveToNextWord()
+                } else {
+                    print("Pronunciación incorrecta. Inténtalo de nuevo.")
+                    self.wordColor = .red // Set word text color to red if pronunciation is incorrect
+                    self.selectedAdvice = self.advice.randomElement() ?? ""
+                    self.isRecording = false
+                    self.startRecordingButtonClicked() // Automatically click start recording button if word is incorrect
+                }
+            } else if let error = error {
+                print("Recognition failed with error: \(error)")
+                self.isRecording = false
+            }
+        })
+        
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
+            // Ignore audio input when the program is speaking
+            if !self.synthesizer.isSpeaking {
+                request.append(buffer)
+            }
+        }
+        
+        do {
+            try audioEngine.start()
+        } catch {
+            print("Error starting audioEngine: \(error)")
+        }
+    }
+    
+    func moveToNextWord() {
+        currentWordIndex = Int.random(in: 0..<words.count) // Select random word index
+        spokenWord = ""
+        wordColor = Color(hex: "4E342E") // Reset word text color to brown for the next word
+        selectedAdvice = ""
+        startSpeechRecognition() // Start listening for the next word automatically
+    }
+    
+    func requestMicrophonePermission() {
+        SFSpeechRecognizer.requestAuthorization { authStatus in
+            switch authStatus {
+            case .authorized:
+                print("Microphone access granted")
+            case .denied:
+                print("User denied access to microphone")
+            case .restricted:
+                print("Microphone access restricted")
+            case .notDetermined:
+                print("Microphone access not determined")
+            default:
+                break
+            }
+        }
+    }
+    
+    func startRecordingButtonClicked() {
+        // Simulate clicking the "Start Recording" button programmatically
+        DispatchQueue.main.async {
+            self.isRecording = false
+            self.startSpeechRecognition()
+        }
+    }
+    
+    func speakWord(_ word: String) {
+        let utterance = AVSpeechUtterance(string: word)
+        utterance.voice = AVSpeechSynthesisVoice(language: "es-ES") // Spanish voice
+        synthesizer.speak(utterance)
+    }
+}
